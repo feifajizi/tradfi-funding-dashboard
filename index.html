@@ -93,6 +93,14 @@ function bindHeaders(){ document.querySelectorAll('th.sortable').forEach(th=>{ t
 
 async function fetchHistory(row){
   const limit=60;
+  if(row.exchange==='Binance'){
+    const j=await getJson(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=${encodeURIComponent(row.symbol)}&limit=${limit}`);
+    return (Array.isArray(j)?j:[]).map(x=>({time:iso(x.fundingTime),rate:num(x.fundingRate),annualizedPct:ann(x.fundingRate,row.intervalHours||8),markPrice:num(x.markPrice)})).sort((a,b)=>Date.parse(b.time)-Date.parse(a.time));
+  }
+  if(row.exchange==='Bybit'){
+    const j=await getJson(`https://api.bybit.com/v5/market/funding/history?category=linear&symbol=${encodeURIComponent(row.symbol)}&limit=${limit}`);
+    return (j.result?.list||[]).map(x=>({time:iso(x.fundingRateTimestamp),rate:num(x.fundingRate),annualizedPct:ann(x.fundingRate,row.intervalHours||8),markPrice:null})).sort((a,b)=>Date.parse(b.time)-Date.parse(a.time));
+  }
   const j=await getJson(`https://crypto-intel-scanner.vercel.app/api/tradfi-funding-history?exchange=${encodeURIComponent(row.exchange)}&symbol=${encodeURIComponent(row.symbol)}&intervalHours=${encodeURIComponent(row.intervalHours||8)}&limit=${limit}&t=${Date.now()}`);
   return (j.data||[]).map(x=>({time:x.time,rate:num(x.fundingRate),annualizedPct:num(x.annualizedPct),markPrice:num(x.markPrice)}));
 }
