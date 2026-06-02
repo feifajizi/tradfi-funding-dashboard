@@ -83,7 +83,7 @@ const FEES = {
   Gate:{maker:0.015,taker:0.050,note:'合约基础费率'},
   Bybit:{maker:0.020,taker:0.055,note:'USDT 永续基础费率'},
   Binance:{maker:0.020,taker:0.050,note:'USDⓈ-M 合约 VIP0'},
-  MSX:{maker:0.020,taker:0.050,note:'页面暂按基础档估算'}
+  MSX:{maker:0.020,taker:0.045,note:'官网 FAQ 合约费率'}
 };
 const fee = ex => FEES[ex] || {maker:null,taker:null,note:'-'};
 const feeText = ex => { const f=fee(ex); return f.maker===null?'-':`挂 ${f.maker.toFixed(3)}% / 吃 ${f.taker.toFixed(3)}%`; };
