@@ -65,7 +65,7 @@
           <tbody id="tbody"><tr><td colspan="9" style="text-align:center;color:#8ea2c0;padding:28px">点击刷新实时费率</td></tr></tbody>
         </table>
       </div>
-      <div class="foot">说明：正费率=多头付费，所以做空收；负费率=空头付费，所以做多收。交易手续费为普通账户/基础档的合约 maker/taker 费率，实际以账户 VIP、活动和交易所页面为准；成本按 1 万 USDT 名义本金、taker 吃单估算。对比视图按双腿各开 1 万计算开仓和平仓手续费。表头可点击排序；点“历史”可查看最近资金费率记录；首次打开会建立当前基准，之后 24 小时内新增品种显示 NEW；“持续高费率”按历史样本筛出更稳定的做空收方向。</div>
+      <div class="foot">说明：正费率=多头付费，所以做空收；负费率=空头付费，所以做多收。交易手续费为普通账户/基础档的合约 maker/taker 费率，实际以账户 VIP、活动和交易所页面为准；成本按 1 万 USDT 名义本金、taker 吃单估算。对比视图按双腿各开 1 万计算开仓和平仓手续费。表头可点击排序；点“历史”可查看最近资金费率记录；首次打开会建立当前基准，之后 24 小时内新增品种显示 NEW；“持续高费率”按正年化均值 >70% 筛选，并显示近3期趋势。</div>
     </div>
 
     <div id="historyModal" class="modal">
@@ -152,16 +152,21 @@ function persistScore(row,hist){
   const avgPositive=positive.length?positive.reduce((a,b)=>a+b,0)/positive.length:0;
   const positiveRatio=clean.length?positive.length/clean.length:0;
   const latest=clean[0] ?? row.annualizedPct ?? 0;
+  const recent3=clean.slice(0,3), prev3=clean.slice(3,6);
+  const recentAvg=recent3.length?recent3.reduce((a,b)=>a+b,0)/recent3.length:latest;
+  const prevAvg=prev3.length?prev3.reduce((a,b)=>a+b,0)/prev3.length:recentAvg;
+  const trendDelta=recentAvg-prevAvg;
+  const trend=trendDelta>20?'升温':trendDelta<-20?'衰减':'维持';
   const min=clean.length?Math.min(...clean):0, max=clean.length?Math.max(...clean):0;
-  const stable=positiveRatio>=0.8 && avg>=50;
-  const score=Math.max(0,avg)*positiveRatio + Math.max(0,latest)*0.15;
-  return {row,samples:clean.length,latest,avg,avgPositive,positiveRatio,min,max,stable,score};
+  const stable=positiveRatio>=0.8 && avgPositive>=70;
+  const score=Math.max(0,avgPositive)*positiveRatio + Math.max(0,latest)*0.15 + (trend==='升温'?20:trend==='衰减'?-30:0);
+  return {row,samples:clean.length,latest,avg,avgPositive,positiveRatio,min,max,stable,score,trend,trendDelta,recentAvg,prevAvg};
 }
 async function buildPersistence(){
   if(persistLoading) return;
   persistLoading=true;
   $('tbody').innerHTML='<tr><td colspan="9" style="text-align:center;color:#8ea2c0;padding:28px">正在计算持续高费率...</td></tr>';
-  const candidates=rows.filter(r=>HISTORY_EXCHANGES.has(r.exchange)&&r.exchange!=='MSX'&&(r.annualizedPct||0)>20).sort((a,b)=>(b.annualizedPct||0)-(a.annualizedPct||0)).slice(0,80);
+  const candidates=rows.filter(r=>HISTORY_EXCHANGES.has(r.exchange)&&r.exchange!=='MSX'&&(r.annualizedPct||0)>70).sort((a,b)=>(b.annualizedPct||0)-(a.annualizedPct||0)).slice(0,100);
   const out=[]; let i=0;
   async function worker(){
     for(;;){
@@ -176,11 +181,11 @@ async function buildPersistence(){
   persistLoading=false;
 }
 async function renderPersist(){
-  $('thead').innerHTML='<tr><th>品种</th><th>交易所</th><th class="right">当前年化</th><th class="right">历史均值</th><th class="right">正费率占比</th><th class="right">最近样本</th><th class="right">区间</th><th>结论</th><th class="right">操作</th></tr>';
-  $('filtered').textContent='持续高费率：按历史样本排序';
+  $('thead').innerHTML='<tr><th>品种</th><th>交易所</th><th class="right">当前年化</th><th class="right">历史均值</th><th class="right">正费率占比</th><th class="right">最近样本</th><th>趋势</th><th class="right">区间</th><th>结论</th><th class="right">操作</th></tr>';
+  $('filtered').textContent='持续高费率：正年化均值 >70%，含趋势';
   if(!persistCache){ await buildPersistence(); }
-  const list=(persistCache||[]).filter(x=>x.samples>0).slice(0,50);
-  $('tbody').innerHTML=list.length?list.map(x=>{ const r=x.row; const tone=x.stable?'good':x.positiveRatio>=0.6?'mid':''; const verdict=x.stable?'持续做空收':x.positiveRatio>=0.6?'偏持续':'波动大'; return `<tr><td><b>${r.base}</b>${newLabel(r)}<div class="muted">${r.symbol}</div></td><td><span class="badge ${r.exchange}">${r.exchange}</span></td><td class="right pos">${pct(r.annualizedPct,1)}</td><td class="right ${x.avg>0?'pos':'neg'}">${pct(x.avg,1)}<div class="persist-note">正均 ${pct(x.avgPositive,1)}</div></td><td class="right"><span class="score-badge ${tone}">${(x.positiveRatio*100).toFixed(0)}%</span></td><td class="right">${x.samples}<div class="persist-note">最新 ${pct(x.latest,1)}</div></td><td class="right"><span class="neg">${pct(x.min,1)}</span> / <span class="pos">${pct(x.max,1)}</span></td><td><span class="score-badge ${tone}">${verdict}</span><div class="persist-note">适合先看现货深度、借币/手续费、滑点</div></td><td class="right"><button class="mini hist" data-ex="${esc(r.exchange)}" data-symbol="${esc(r.symbol)}">历史</button> <a class="link" target="_blank" href="${r.url}">打开</a></td></tr>` }).join(''):'<tr><td colspan="9" style="text-align:center;color:#8ea2c0;padding:28px">暂无可计算历史的高正费率品种</td></tr>';
+  const list=(persistCache||[]).filter(x=>x.samples>0&&x.avgPositive>70).slice(0,50);
+  $('tbody').innerHTML=list.length?list.map(x=>{ const r=x.row; const tone=x.stable?'good':x.positiveRatio>=0.6?'mid':''; const verdict=x.stable?'持续做空收':x.positiveRatio>=0.6?'偏持续':'波动大'; return `<tr><td><b>${r.base}</b>${newLabel(r)}<div class="muted">${r.symbol}</div></td><td><span class="badge ${r.exchange}">${r.exchange}</span></td><td class="right pos">${pct(r.annualizedPct,1)}</td><td class="right ${x.avg>0?'pos':'neg'}">${pct(x.avg,1)}<div class="persist-note">正均 ${pct(x.avgPositive,1)}</div></td><td class="right"><span class="score-badge ${tone}">${(x.positiveRatio*100).toFixed(0)}%</span></td><td class="right">${x.samples}<div class="persist-note">最新 ${pct(x.latest,1)}</div></td><td><span class="score-badge ${x.trend==='升温'?'good':x.trend==='衰减'?'':'mid'}">${x.trend}</span><div class="persist-note">近3期 ${pct(x.recentAvg,1)} / 前3期 ${pct(x.prevAvg,1)}</div></td><td class="right"><span class="neg">${pct(x.min,1)}</span> / <span class="pos">${pct(x.max,1)}</span></td><td><span class="score-badge ${tone}">${verdict}</span><div class="persist-note">正年化均值>70%，再看现货深度/滑点</div></td><td class="right"><button class="mini hist" data-ex="${esc(r.exchange)}" data-symbol="${esc(r.symbol)}">历史</button> <a class="link" target="_blank" href="${r.url}">打开</a></td></tr>` }).join(''):'<tr><td colspan="9" style="text-align:center;color:#8ea2c0;padding:28px">暂无可计算历史的高正费率品种</td></tr>';
 }
 
 
