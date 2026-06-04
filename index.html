@@ -147,7 +147,7 @@ async function fetchOKX(){ const [inst,tickers]=await Promise.all([getJson('http
 
 async function fetchProxyVenue(label,key){
   const j=await getJson(`https://crypto-intel-scanner.vercel.app/api/tradfi-funding?exchanges=${encodeURIComponent(key)}&t=${Date.now()}`);
-  return (j.data||[]).map(r=>mk({exchange:label,symbol:r.symbol,base:r.base,rate:label==='GRVT'&&r.fundingRate!==null?r.fundingRate/100:r.fundingRate,intervalHours:r.intervalHours,nextFundingTime:r.nextFundingTime,markPrice:r.markPrice,lastPrice:r.lastPrice,openInterest:r.openInterest,url:r.url}));
+  return (j.data||[]).map(r=>mk({exchange:label,symbol:r.symbol,base:r.base,rate:r.fundingRate,intervalHours:r.intervalHours,nextFundingTime:r.nextFundingTime,markPrice:r.markPrice,lastPrice:r.lastPrice,openInterest:r.openInterest,url:r.url}));
 }
 async function fetchAsterDEX(){ return fetchProxyVenue('AsterDEX','asterdex'); }
 async function fetchLighter(){ return fetchProxyVenue('Lighter','lighter'); }
